@@ -1,0 +1,247 @@
+from struct import unpack
+
+
+marker_mapping = {
+	0xffd8: "__Start of Image",
+	0xffe0: "__Application Default Header",
+	0xffdb: "__Quantization Table",
+	0xffc0: "__Start of Frame, Base line DCT",
+	0xffc4: "__Define Huffman Table",
+	0xffda: "__Start of Scan",
+	0xffd9: "__End of Image"
+}
+
+#def GetArray(type, data, length):
+#	s = ""
+#	for i in range(length):
+#		s = s + type
+#	return list(unpack(s, data[:length]))
+
+def PrintMatrix(m):
+	#A convenience function for printing matrices
+	for j in range(8):
+		print("| ", end="")
+		for i in range(8):
+			print("%2d " % m[i + j * 8], end="")
+		print("|")
+	print()
+
+
+def RemoveFF00(data):
+	#Removes 0x00 after 0xff in the image scan section of JPEG
+	datapro = []
+	i = 0
+	while(True):
+		b,bnext = unpack("BB",data[i:i+2])		
+		if (b == 0xff):
+			if (bnext != 0):
+				break
+			datapro.append(data[i])
+			i+=2
+		else:
+			datapro.append(data[i])
+			i+=1
+	return datapro, i
+
+
+class Stream:
+# convert a string into a bit stream
+	def __init__(self, data):
+		self.data= data
+		self.pos = 0
+
+	def GetBit(self):
+		b = self.data[self.pos >> 3]
+		s = 7-(self.pos & 0x7)
+		self.pos += 1
+		return (b >> s) & 1
+
+	def GetBitN(self, l):
+		val = 0
+		for i in range(l):
+			val = val*2 + self.GetBit()
+		return val
+
+zigzag = [
+	 0,  1,  8, 16,  9,  2,  3, 10,
+	17, 24, 32, 25, 18, 11,  4,  5,
+	12, 19,	26, 33, 40, 48, 41, 34,
+	27, 20, 13,  6,  7, 14, 21, 28,
+	35, 42, 49, 56, 57, 50, 43, 36,
+	29, 22, 15, 23, 30, 37, 44, 51,
+	58, 59, 52, 45, 38, 31, 39, 46,
+	53, 60, 61, 54, 47, 55, 62, 63]
+#妈的，两个程序的zigzag 不一样
+
+class IDCT:
+
+# helps build a MCU matrix
+
+
+	def __init__(self):
+		self.base = [0]*64
+
+
+
+
+
+
+
+
+	def NormCoeff(self, n):
+		return math.sqrt( 1.0/8.0) if (n==0) else math.sqrt( 2.0/8.0)
+
+	def AddIDC(self, n,m, coeff):
+		an = self.NormCoeff(n)
+		am = self.NormCoeff(m)
+
+		for y in range(0,8):
+			for x in range(0,8):
+				nn = an*math.cos( n* math.pi * (x +.5)/8.0 )
+				mm = am*math.cos( m* math.pi * (y +.5)/8.0 )
+				self.base[ XYtoLin(x, y) ] += nn*mm*coeff
+
+	def AddZigZag(self, zi, coeff):
+		i = zigzag[zi]
+		n = i & 0x7
+		m = i >> 3
+		self.AddIDC( n,m, coeff)
+
+
+class JPEG:
+	def __init__(self, image_file):
+		with open(image_file, 'rb') as f:
+			#self.huffman_tables = {}
+			self.quant = {}
+			self.quantMapping = []
+			self.img_data = f.read()
+			print(image_file, "open success")
+
+	def BuildMatrix(self, st, idx, quant, olddccoeff):	
+		i = IDCT()	
+		code = self.tables[0+idx].GetCode(st)
+		bits = st.GetBitN(code)
+		dccoeff = DecodeNumber(code, bits)  + olddccoeff
+
+		i.AddZigZag(0,(dccoeff) * quant[0])
+		l = 1
+		while(l<64):
+			code = self.tables[16+idx].GetCode(st) 
+			if code == 0:
+				break
+			if code >15:
+				l+= (code>>4)
+				code = code & 0xf
+			
+			bits = st.GetBitN( code )
+
+			if l<64:
+				coeff  =  DecodeNumber(code, bits) 
+				i.AddZigZag(l,coeff * quant[l])
+				l+=1
+		return i, dccoeff
+
+
+	def StartOfScan(self, data, hdrlen):
+		#将0xFF后的0x00去掉
+		data,lenchunk = RemoveFF00(data[hdrlen:])
+
+		st = Stream(data)
+
+		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
+
+		for y in range(self.height//8):
+			for x in range(self.width//8):
+				# decode 8x8 block
+				matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
+				matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
+				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
+				# store it as RGB
+				for yy in range(8):
+					for xx in range(8):
+						self.image[(x*8+xx) + ((y*8+yy) * self.width)] = ColorConversion( matL.base[XYtoLin(xx,yy)] , matCb.base[XYtoLin(xx,yy)], matCr.base[XYtoLin(xx,yy)])
+		
+			return lenchunk + hdrlen
+
+
+	def DefineHuffmanTables(self, data):
+		while(len(data)>0):
+			offset = 0
+			hdr, = unpack("B",data[offset : offset + 1])
+			offset += 1 
+
+			#这里用"B"*16代替原程序里的GetArray循环16次
+			lengths = unpack("B"*16, data[offset:offset+16]) 
+			offset += 16
+
+			elements = []
+			for i in lengths:
+				elements += unpack("B"*i, data[offset:offset+i])
+				offset = offset + i 
+
+			#hf = HuffmanTable()
+			#hf.GetHuffmanBits( lengths, elements)
+			#self.tables[hdr] = hf
+			print("Header: ", hdr)
+			print("lengths: ", lengths)
+			print("Elements: ", len(elements))
+			data = data[offset:]
+
+
+	def BaselineDCT(self, data):
+		hdr, self.height, self.width, components = unpack(">BHHB",data[0:6])
+		print("size %ix%i" % (self.width,  self.height))
+		print("hdr %i, components %i" % (hdr, components))
+		self.image = [0] * (self.width * self.height);
+		for i in range(components):
+			id, samp, QtbId = unpack("BBB",data[6+i*3:9+i*3])
+			self.quantMapping.append(QtbId) 
+
+
+	def DefineQuantizationTables(self, data):
+		while(len(data)>0):
+			hdr, = unpack("B",data[0:1])
+			#print hdr >>4, hdr & 0xf
+			self.quant[hdr & 0xf] =  unpack("B"*64, data[1:1 + 64]) 
+			PrintMatrix(self.quant[hdr >>4])
+			data = data[65:]
+
+	def decode(self):
+		data = self.img_data
+		while(True):
+			marker, = unpack(">H", data[0:2])
+			print(marker_mapping.get(marker))
+			if marker == 0xffd8:
+				data = data[2:]
+			elif marker == 0xffd9:
+				return
+			else:
+				len_chunk, = unpack(">H", data[2:4])
+				len_chunk += 2
+				chunk = data[4:len_chunk]
+
+				if marker == 0xFFC4:
+					self.DefineHuffmanTables(chunk)
+				elif marker == 0xFFC0:
+					self.BaselineDCT(chunk)
+				elif marker == 0xFFDB:
+					self.DefineQuantizationTables(chunk)
+				#进不去？
+				elif marker == 0xFFDA:
+					len_chunk = self.StartOfScan(data, len_chunk)
+
+
+				data = data[len_chunk:]		  
+			if len(data)==0:
+				break		
+
+
+if __name__ == "__main__":
+
+	#Address = r'D:/Python/IMG_0401.JPG'
+	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
+
+	img = JPEG(Address)
+
+	img.decode()
+	
