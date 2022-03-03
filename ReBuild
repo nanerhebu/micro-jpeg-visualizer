@@ -1,5 +1,5 @@
 from struct import unpack
-
+import math
 
 marker_mapping = {
 	0xffd8: "__Start of Image",
@@ -11,11 +11,17 @@ marker_mapping = {
 	0xffd9: "__End of Image"
 }
 
-#def GetArray(type, data, length):
-#	s = ""
-#	for i in range(length):
-#		s = s + type
-#	return list(unpack(s, data[:length]))
+def ColorConversion(Y, Cr, Cb):
+    #Converts Y, Cr and Cb to RGB color space
+    R = Cr * (2 - 2 * 0.299) + Y
+    B = Cb * (2 - 2 * 0.114) + Y
+    G = (Y - 0.114 * B - 0.299 * R) / 0.587
+    return (Clamp(R + 128), Clamp(G + 128), Clamp(B + 128))
+
+def Clamp(col):
+	col = 255 if col>255 else col
+	col = 0 if col<0 else col
+	return  int(col)
 
 def PrintMatrix(m):
 	#A convenience function for printing matrices
@@ -82,9 +88,7 @@ zigzag = [
 #妈的，两个程序的zigzag 不一样
 
 class IDCT:
-
 # helps build a MCU matrix
-
 	def __init__(self):
 		self.base = [0]*64
 
@@ -99,7 +103,7 @@ class IDCT:
 			for x in range(0,8):
 				nn = an*math.cos( n* math.pi * (x +.5)/8.0 )
 				mm = am*math.cos( m* math.pi * (y +.5)/8.0 )
-				self.base[ XYtoLin(x, y) ] += nn*mm*coeff
+				self.base[x+y*8] += nn*mm*coeff
 
 	def AddZigZag(self, zi, coeff):
 		i = zigzag[zi]
@@ -205,7 +209,7 @@ class JPEG:
 				# store it as RGB
 				for yy in range(8):
 					for xx in range(8):
-						self.image[(x*8+xx) + ((y*8+yy) * self.width)] = ColorConversion( matL.base[XYtoLin(xx,yy)] , matCb.base[XYtoLin(xx,yy)], matCr.base[XYtoLin(xx,yy)])
+						self.image[(x*8+xx) + ((y*8+yy) * self.width)] = ColorConversion( matL.base[xx+yy*8] , matCb.base[xx+yy*8], matCr.base[xx+yy*8])
 		
 			return lenchunk + hdrlen
 
@@ -259,7 +263,7 @@ class JPEG:
 			marker, = unpack(">H", data[0:2])
 			print(marker_mapping.get(marker))
 			if marker == 0xffd8:
-				data = data[2:]
+				len_chunk = 2
 			elif marker == 0xffd9:
 				return
 			else:
@@ -273,22 +277,21 @@ class JPEG:
 					self.BaselineDCT(chunk)
 				elif marker == 0xFFDB:
 					self.DefineQuantizationTables(chunk)
-				#进不去？
 				elif marker == 0xFFDA:
 					len_chunk = self.StartOfScan(data, len_chunk)
 
 
-				data = data[len_chunk:]		  
+			data = data[len_chunk:]		 
+			
 			if len(data)==0:
 				break		
 
 
 if __name__ == "__main__":
 
-	Address = r'D:/Python/IMG_0401.JPG'
-	#Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
+	#Address = r'D:/Python/IMG_0401.JPG'
+	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
 
 	img = JPEG(Address)
 
 	img.decode()
-	
