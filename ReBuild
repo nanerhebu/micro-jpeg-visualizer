@@ -1,5 +1,6 @@
 from struct import unpack
 import math
+from time import time
 
 marker_mapping = {
 	0xffd8: "__Start of Image",
@@ -12,7 +13,7 @@ marker_mapping = {
 }
 
 def ColorConversion(Y, Cr, Cb):
-    #Converts Y, Cr and Cb to RGB color space
+	#Converts Y, Cr and Cb to RGB color space
     R = Cr * (2 - 2 * 0.299) + Y
     B = Cb * (2 - 2 * 0.114) + Y
     G = (Y - 0.114 * B - 0.299 * R) / 0.587
@@ -28,9 +29,8 @@ def PrintMatrix(m):
 	for j in range(8):
 		print("| ", end="")
 		for i in range(8):
-			print("%2d " % m[i + j * 8], end="")
+			print("% 3.4f " % m[i + j * 8], end="")
 		print("|")
-	print()
 
 
 def RemoveFF00(data):
@@ -180,7 +180,7 @@ class JPEG:
 			if code == 0:
 				break
 			if code >15:
-				l+= (code>>4)
+				l += (code>>4)
 				code = code & 0xf
 			
 			bits = st.GetBitN( code )
@@ -188,7 +188,7 @@ class JPEG:
 			if l<64:
 				coeff  =  DecodeNumber(code, bits) 
 				i.AddZigZag(l,coeff * quant[l])
-				l+=1
+				l += 1
 		return i, dccoeff
 
 
@@ -206,11 +206,17 @@ class JPEG:
 				matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
 				matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
 				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
+				print(PrintMatrix(matL.base))
+				print(PrintMatrix(matCr.base))
+				print(PrintMatrix(matCb.base))
+				time_start = time()
 				# store it as RGB
 				for yy in range(8):
 					for xx in range(8):
 						self.image[(x*8+xx) + ((y*8+yy) * self.width)] = ColorConversion( matL.base[xx+yy*8] , matCb.base[xx+yy*8], matCr.base[xx+yy*8])
-		
+				time_end = time()
+				print("耗时",time_end - time_start,"s")
+				break
 			return lenchunk + hdrlen
 
 
@@ -254,7 +260,7 @@ class JPEG:
 			hdr, = unpack("B",data[0:1])
 			#print hdr >>4, hdr & 0xf
 			self.quant[hdr & 0xf] =  unpack("B"*64, data[1:1 + 64]) 
-			PrintMatrix(self.quant[hdr >>4])
+			#PrintMatrix(self.quant[hdr & 0xf])
 			data = data[65:]
 
 	def decode(self):
