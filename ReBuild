@@ -1,6 +1,8 @@
 from struct import unpack
 import math
 from time import time
+from numpy import zeros, uint8
+import cv2
 
 marker_mapping = {
 	0xffd8: "__Start of Image",
@@ -165,6 +167,8 @@ class JPEG:
 			self.quant = {}
 			self.quantMapping = []
 			self.img_data = f.read()
+			self.width = 0
+			self.height = 0
 			print(image_file, "open success")
 
 	def BuildMatrix(self, st, idx, quant, olddccoeff):	
@@ -191,7 +195,6 @@ class JPEG:
 				l += 1
 		return i, dccoeff
 
-
 	def StartOfScan(self, data, hdrlen):
 		#将0xFF后的0x00去掉
 		data,lenchunk = RemoveFF00(data[hdrlen:])
@@ -200,24 +203,26 @@ class JPEG:
 
 		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
 
-		for y in range(self.height//8):
-			for x in range(self.width//8):
+		print(self.height//8)
+		for y in range(2):	#range(self.height//8):
+			print(y)
+			for x in range(2):	#range(self.width//8):
 				# decode 8x8 block
 				matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
 				matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
+				#——————Cb好像是不对的
 				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
-				print(PrintMatrix(matL.base))
-				print(PrintMatrix(matCr.base))
-				print(PrintMatrix(matCb.base))
-				time_start = time()
+				#print(PrintMatrix(matL.base))
+				#print(PrintMatrix(matCr.base))
+				#print(PrintMatrix(matCb.base))
+
 				# store it as RGB
 				for yy in range(8):
 					for xx in range(8):
-						self.image[(x*8+xx) + ((y*8+yy) * self.width)] = ColorConversion( matL.base[xx+yy*8] , matCb.base[xx+yy*8], matCr.base[xx+yy*8])
-				time_end = time()
-				print("耗时",time_end - time_start,"s")
-				break
-			return lenchunk + hdrlen
+						self.image[y*8+yy, x*8+xx, ] = ColorConversion( matL.base[xx+yy*8], matCb.base[xx+yy*8], matCr.base[xx+yy*8])
+
+		
+		return lenchunk + hdrlen
 
 
 	def DefineHuffmanTables(self, data):
@@ -249,7 +254,8 @@ class JPEG:
 		hdr, self.height, self.width, components = unpack(">BHHB",data[0:6])
 		print("size %ix%i" % (self.width,  self.height))
 		print("hdr %i, components %i" % (hdr, components))
-		self.image = [0] * (self.width * self.height);
+		#self.image = [0] * (self.width * self.height);
+		self.image = zeros((self.height, self.width, 3), uint8)
 		for i in range(components):
 			id, samp, QtbId = unpack("BBB",data[6+i*3:9+i*3])
 			self.quantMapping.append(QtbId) 
@@ -271,7 +277,7 @@ class JPEG:
 			if marker == 0xffd8:
 				len_chunk = 2
 			elif marker == 0xffd9:
-				return
+				return (self.width, self.height, self.image)
 			else:
 				len_chunk, = unpack(">H", data[2:4])
 				len_chunk += 2
@@ -285,19 +291,31 @@ class JPEG:
 					self.DefineQuantizationTables(chunk)
 				elif marker == 0xFFDA:
 					len_chunk = self.StartOfScan(data, len_chunk)
-
-
-			data = data[len_chunk:]		 
-			
+			data = data[len_chunk:]
 			if len(data)==0:
 				break		
+		
+		print("unexpect endding")
+		return (9999,9999,[])
 
+	def IMG(self):
+		return (self.image)
 
 if __name__ == "__main__":
+	
+	from PIL import Image
 
 	#Address = r'D:/Python/IMG_0401.JPG'
 	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
+	#Address = r'F:/PyFile/test.jpg' 
 
 	img = JPEG(Address)
 
-	img.decode()
+	width, height, image = img.decode()
+	
+	#image1 = Image.new("RGB", (width, height))
+
+	image1 = Image.fromarray(image).convert('RGB')
+	image1.show() 
+
+	
