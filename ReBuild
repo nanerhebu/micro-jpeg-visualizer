@@ -203,14 +203,15 @@ class JPEG:
 
 		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
 
-		print(self.height//8)
-		for y in range(2):	#range(self.height//8):
-			print(y)
-			for x in range(2):	#range(self.width//8):
+		yyy=10
+
+
+		for y in range(yyy):	#range(self.height//8):
+			for x in range(self.width//8):
+				print(y,x)
 				# decode 8x8 block
 				matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
 				matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
-				#——————Cb好像是不对的
 				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
 				#print(PrintMatrix(matL.base))
 				#print(PrintMatrix(matCr.base))
@@ -220,8 +221,10 @@ class JPEG:
 				for yy in range(8):
 					for xx in range(8):
 						self.image[y*8+yy, x*8+xx, ] = ColorConversion( matL.base[xx+yy*8], matCb.base[xx+yy*8], matCr.base[xx+yy*8])
-
-		
+				#print(self.image[y*8:y*8+8,x*8:x*8+8,0])
+		image1 = Image.fromarray(self.image[0:yyy*8+8,:,:]).convert('RGB')
+		image1.show() 
+				
 		return lenchunk + hdrlen
 
 
@@ -305,8 +308,8 @@ if __name__ == "__main__":
 	
 	from PIL import Image
 
-	#Address = r'D:/Python/IMG_0401.JPG'
-	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
+	Address = r'D:/Python/IMG_0401.JPG'
+	#Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
 	#Address = r'F:/PyFile/test.jpg' 
 
 	img = JPEG(Address)
@@ -317,5 +320,3 @@ if __name__ == "__main__":
 
 	image1 = Image.fromarray(image).convert('RGB')
 	image1.show() 
-
-	
