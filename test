@@ -1,0 +1,79 @@
+from struct import unpack
+import math
+from time import time
+from numpy import zeros, uint8
+import cv2
+
+marker_mapping = {
+	0xffd8: "__Start of Image",
+	0xffe0: "__Application Default Header",
+	0xffdb: "__Quantization Table",
+	0xffc0: "__Start of Frame, C0_Base line DCT",
+	0xffc1: "__Start of Frame, C1_Base line DCT",
+	0xffc4: "__Define Huffman Table",
+	0xffda: "__Start of Scan",
+	0xffd9: "__End of Image",
+	0xfffe: "__Comments"
+}
+
+
+class JPEG:
+	def __init__(self, image_file):
+		with open(image_file, 'rb') as f:
+			self.huffman_tables = {}
+			self.quant = {}
+			self.quantMapping = []
+			self.img_data = f.read()
+			self.width = 0
+			self.height = 0
+			print(image_file, "open success")
+
+	def decode(self):
+		data = self.img_data
+		len_chunk = 0
+		while(True):
+			marker, = unpack(">H", data[0:2])
+			print("marker %02X"%marker)
+			if(not (marker_mapping.get(marker) is None)):
+				print("marker %02X"%marker, marker_mapping.get(marker))
+			if marker == 0xFFD8:
+				len_chunk = 2
+			elif marker == 0xFFD9:
+				print()
+				break
+				#return (self.width, self.height, self.image)
+			else:
+				len_chunk, = unpack(">H", data[2:4])
+				print("len_chunk",len_chunk)
+				len_chunk += 2
+				chunk = data[4:len_chunk]
+
+				if marker == 0xFFC4:
+					print()
+					#self.DefineHuffmanTables(chunk)
+				elif marker == 0xFFC0:
+					print()
+					#self.BaselineDCT(chunk)
+				elif marker == 0xFFDB:
+					print()
+					#self.DefineQuantizationTables(chunk)
+				elif marker == 0xFFFE:
+					print()
+				elif marker == 0xFFDA:
+					print()
+					#len_chunk = self.StartOfScan(data, len_chunk)
+			data = data[len_chunk:]
+			if len(data)==0:
+				break	
+
+if __name__ == "__main__":
+	
+	from PIL import Image
+
+	#Address = r'D:/Python/IMG_0401.JPG'
+	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
+	#Address = r'F:/PyFile/test.jpg' 
+
+	img = JPEG(Address)
+
+	img.decode()
