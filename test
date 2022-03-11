@@ -6,7 +6,24 @@ import cv2
 
 marker_mapping = {
 	0xffd8: "__Start of Image",
-	0xffe0: "__Application Default Header",
+	#0xFFE0~0xFFEF都是预留的"Application Marker"，可以同时存在。
+	#苹果输出的jpg，好像只保护E1。所以我枚举后面的。
+	0xffe0: "__Application Default Header_E0",
+	0xffe1: "__Application Default Header_E1_iPhone's only use this",
+	0xFFE2: "__Application Default Header_E2",
+	0xFFE3: "__Application Default Header_E3",
+	0xFFE4: "__Application Default Header_E4",
+	0xFFE5: "__Application Default Header_E5",
+	0xFFE6: "__Application Default Header_E6",
+	0xFFE7: "__Application Default Header_E7",
+	0xFFE8: "__Application Default Header_E8",
+	0xFFE9: "__Application Default Header_E9",
+	0xFFEA: "__Application Default Header_EA",
+	0xFFEB: "__Application Default Header_EB",
+	0xFFEC: "__Application Default Header_EC",
+	0xFFED: "__Application Default Header_ED",
+	0xFFEE: "__Application Default Header_EE",
+	0xFFEF: "__Application Default Header_EF",
 	0xffdb: "__Quantization Table",
 	0xffc0: "__Start of Frame, C0_Base line DCT",
 	0xffc1: "__Start of Frame, C1_Base line DCT",
@@ -44,7 +61,6 @@ class JPEG:
 				#return (self.width, self.height, self.image)
 			else:
 				len_chunk, = unpack(">H", data[2:4])
-				print("len_chunk",len_chunk)
 				len_chunk += 2
 				chunk = data[4:len_chunk]
 
