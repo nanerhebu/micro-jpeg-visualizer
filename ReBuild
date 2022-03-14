@@ -6,8 +6,10 @@ import cv2
 
 marker_mapping = {
 	0xffd8: "__Start of Image",
-	0xffe0: "__Application Default Header",
+	0xffe0: "__Application Default Header",	#FFE0-FFEF
+	0xffe1: "__Application Default Header_E1_iPhone's only use this",
 	0xffdb: "__Quantization Table",
+	0xffdd: "__Define Restart Interval",	#FFD0-FFD7
 	0xffc0: "__Start of Frame, Base line DCT",
 	0xffc4: "__Define Huffman Table",
 	0xffda: "__Start of Scan",
@@ -169,6 +171,7 @@ class JPEG:
 			self.img_data = f.read()
 			self.width = 0
 			self.height = 0
+			self.DRI = 0
 			print(image_file, "open success")
 
 	def BuildMatrix(self, st, idx, quant, olddccoeff):	
@@ -203,28 +206,24 @@ class JPEG:
 
 		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
 
-		yyy=10
-
-
-		for y in range(yyy):	#range(self.height//8):
-			for x in range(self.width//8):
-				print(y,x)
+		print(self.height//8)
+		for y in range(2):	#range(self.height//8):
+			print(y)
+			for x in range(2):	#range(self.width//8):
 				# decode 8x8 block
 				matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
 				matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
 				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
-				#print(PrintMatrix(matL.base))
-				#print(PrintMatrix(matCr.base))
-				#print(PrintMatrix(matCb.base))
+				print(PrintMatrix(matL.base))
+				print(PrintMatrix(matCr.base))
+				print(PrintMatrix(matCb.base))
 
 				# store it as RGB
 				for yy in range(8):
 					for xx in range(8):
 						self.image[y*8+yy, x*8+xx, ] = ColorConversion( matL.base[xx+yy*8], matCb.base[xx+yy*8], matCr.base[xx+yy*8])
-				#print(self.image[y*8:y*8+8,x*8:x*8+8,0])
-		image1 = Image.fromarray(self.image[0:yyy*8+8,:,:]).convert('RGB')
-		image1.show() 
-				
+
+		
 		return lenchunk + hdrlen
 
 
@@ -286,19 +285,22 @@ class JPEG:
 				len_chunk += 2
 				chunk = data[4:len_chunk]
 
-				if marker == 0xFFC4:
-					self.DefineHuffmanTables(chunk)
+
+				if marker == 0xFFDB:
+					self.DefineQuantizationTables(chunk)
+				elif marker == 0xFFDD:
+					self.DRI, = unpack(">H", data[4:6])
 				elif marker == 0xFFC0:
 					self.BaselineDCT(chunk)
-				elif marker == 0xFFDB:
-					self.DefineQuantizationTables(chunk)
+				elif marker == 0xFFC4:
+					self.DefineHuffmanTables(chunk)
 				elif marker == 0xFFDA:
 					len_chunk = self.StartOfScan(data, len_chunk)
 			data = data[len_chunk:]
 			if len(data)==0:
 				break		
 		
-		print("unexpect endding")
+		print("Unexpected Endding")
 		return (9999,9999,[])
 
 	def IMG(self):
@@ -308,8 +310,8 @@ if __name__ == "__main__":
 	
 	from PIL import Image
 
-	Address = r'D:/Python/IMG_0401.JPG'
-	#Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
+	#Address = r'D:/Python/IMG_0401.JPG'
+	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
 	#Address = r'F:/PyFile/test.jpg' 
 
 	img = JPEG(Address)
@@ -320,3 +322,5 @@ if __name__ == "__main__":
 
 	image1 = Image.fromarray(image).convert('RGB')
 	image1.show() 
+
+	
