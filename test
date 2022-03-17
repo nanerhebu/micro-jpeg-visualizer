@@ -90,6 +90,16 @@ zigzag = [
 	58, 59, 52, 45, 38, 31, 39, 46,
 	53, 60, 61, 54, 47, 55, 62, 63]
 #妈的，两个程序的zigzag 不一样
+#zigzag = [
+#     0,  1,  5,  6, 14, 15, 27, 28,
+#     2,  4,  7, 13, 16, 26, 29, 42,
+#     3,  8, 12, 17, 25, 30, 41, 43,
+#     9, 11, 18, 24, 31, 40, 44, 53,
+#    10, 19, 23, 32, 39, 45, 52, 54,
+#    20, 22, 33, 38, 46, 51, 55, 60,
+#    21, 34, 37, 47, 50, 56, 59, 61,
+#    35, 36, 48, 49, 57, 58, 62, 63]
+
 
 class IDCT:
 # helps build a MCU matrix
@@ -202,19 +212,22 @@ class JPEG:
 	def StartOfScan(self, data, hdrlen):
 		#将0xFF后的0x00去掉, lenchunk是去掉00之后的数据长度
 		data, lenchunk = RemoveFF00(data[hdrlen:])
-
 		st = Stream(data)
-
 		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
+		#哪个是宽哪个是高
 
-		print(self.height//8)
-		for y in range(2):	#range(self.height//8):
-			print(y)
-			for x in range(2):	#range(self.width//8):
+		for y in range(1):	#range(self.height//8//self.Height_Unit):
+			for x in range(1):	#range(self.width//8//self.Width_Unit):
 				# decode 8x8 block
-				matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
-				matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
-				matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
+				for zx in range(self.HV_Sample[0,0]):
+					for zy in range(self.HV_Sample[0,1]):
+						matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
+				for zx in range(self.HV_Sample[1,0]):
+					for zy in range(self.HV_Sample[1,1]):
+						matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
+				for zx in range(self.HV_Sample[0,0]):
+					for zy in range(self.HV_Sample[0,1]):
+						matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
 				print(PrintMatrix(matL.base))
 				print(PrintMatrix(matCr.base))
 				print(PrintMatrix(matCb.base))
@@ -266,9 +279,12 @@ class JPEG:
 			H = HV >> 4
 			V = HV & 0xf
 			self.HV_Sample[id-1, 0], self.HV_Sample[id-1, 1] = H, V
-			print(id,QtbId)
 			self.quantMapping.append(QtbId) 
-		#print(self.HV_Sample)
+
+		self.Width_Unit = max(self.HV_Sample[0,0],self.HV_Sample[1,0],self.HV_Sample[2,0])
+		self.Height_Unit = max(self.HV_Sample[0,1],self.HV_Sample[1,1],self.HV_Sample[2,1])
+		self.Block = zeros((self.Height_Unit*8, self.Width_Unit*8, 3))
+
 
 
 	def DefineQuantizationTables(self, data):
