@@ -222,21 +222,36 @@ class JPEG:
 				for zx in range(self.HV_Sample[0,0]):
 					for zy in range(self.HV_Sample[0,1]):
 						matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
+						for xx in range(8):
+							for yy in range(8):
+								for ux in range(self.Width_Unit//self.HV_Sample[0,0]):
+									for uy in range(self.Height_Unit//self.HV_Sample[0,1]):
+										self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[0,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[0,0]+ux,0] = matL.base[xx+yy*8]
 				for zx in range(self.HV_Sample[1,0]):
 					for zy in range(self.HV_Sample[1,1]):
 						matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
-				for zx in range(self.HV_Sample[0,0]):
-					for zy in range(self.HV_Sample[0,1]):
+						for xx in range(8):
+							for yy in range(8):
+								for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
+									for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
+										self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[1,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[1,0]+ux,1] = matCr.base[xx+yy*8]
+				for zx in range(self.HV_Sample[2,0]):
+					for zy in range(self.HV_Sample[2,1]):
 						matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
-				print(PrintMatrix(matL.base))
-				print(PrintMatrix(matCr.base))
-				print(PrintMatrix(matCb.base))
+						for xx in range(8):
+							for yy in range(8):
+								for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
+									for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
+										self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[2,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[2,0]+ux,2] = matCb.base[xx+yy*8]
+
 
 				# store it as RGB
-				for yy in range(8):
-					for xx in range(8):
-						self.image[y*8+yy, x*8+xx, ] = ColorConversion( matL.base[xx+yy*8], matCb.base[xx+yy*8], matCr.base[xx+yy*8])
+				for yy in range(8*self.Height_Unit):
+					for xx in range(8*self.Width_Unit):
+						self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = ColorConversion(self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2])
 
+		image1 = Image.fromarray(self.image[0:16,0:16,0:1]).convert('RGB')
+		image1.show() 
 		#return的好像不对。lenchunk是替换掉00后的数据长度。
 		return lenchunk + hdrlen
 
