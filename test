@@ -4,6 +4,8 @@ from time import time
 from numpy import zeros, uint8, ones
 import cv2
 import ToolKit
+from bitarray import bitarray
+
 
 marker_mapping = {
 	0xffd8: "__Start of Image",
@@ -153,8 +155,8 @@ def SOS_progressive_DC_scan(self,X,Y,sh,data):
     b.frombytes(reg)
 
     #adjXY这两个，算了好像没用
-    adjY = ceil(ceil(Y/8)/self.maxV)*maxV
-    adjX = ceil(ceil(Y/8),self.maxH)*maxH
+    adjY = math.ceil(math.ceil(Y/8)/self.maxV)*maxV
+    adjX = math.ceil(math.ceil(Y/8),self.maxH)*maxH
     X=0
     Y=0
     lastDC = [0,0,0,0]
