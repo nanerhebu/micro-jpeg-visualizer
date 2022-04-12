@@ -147,6 +147,7 @@ class JPEG:
 			self.width = 0
 			self.height = 0
 			self.DRI = 0
+			self.ADScounter = 0
 			print(image_file, "open success")
 
 	def BuildMatrix(self, st, idx, quant, olddccoeff):	
@@ -175,55 +176,65 @@ class JPEG:
 
 	def StartOfScan(self, data, hdrlen):
 		#将0xFF后的0x00去掉, lenchunk是去掉00之后的数据长度
+		lenchunk = hdrlen
+		self.ADScounter = self.ADScounter + hdrlen
 		#print(type(data))
 		#print(len(data))
-		#print(hdrlen)
-		data, lenchunk = ToolKit.RemoveFF00(data[hdrlen:])
-		#print(type(data))
-		#print(len(data))
-		st = Stream(data)
 		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
 		#哪个是宽哪个是高
-		print(self.HV_Sample)
-		print(self.Height_Unit,self.Width_Unit)
+		#print(self.HV_Sample)
+		#print(self.Height_Unit,self.Width_Unit)
 
-		for y in range(1):	#range(self.height//8//self.Height_Unit):
-			for x in range(self.width//8//self.Width_Unit):
-				# decode 8x8 block
-				print(x," pos = ",st.pos)
-				for zx in range(self.HV_Sample[0,0]):
-					for zy in range(self.HV_Sample[0,1]):
-						matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
-						for xx in range(8):
-							for yy in range(8):
-								for ux in range(self.Width_Unit//self.HV_Sample[0,0]):
-									for uy in range(self.Height_Unit//self.HV_Sample[0,1]):
-										self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[0,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[0,0]+ux,0] = matL.base[xx+yy*8]
-				for zx in range(self.HV_Sample[1,0]):
-					for zy in range(self.HV_Sample[1,1]):
-						matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
-						for xx in range(8):
-							for yy in range(8):
-								for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
-									for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
-										self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[1,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[1,0]+ux,1] = matCr.base[xx+yy*8]
-				for zx in range(self.HV_Sample[2,0]):
-					for zy in range(self.HV_Sample[2,1]):
-						matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
-						for xx in range(8):
-							for yy in range(8):
-								for ux in range(self.Width_Unit//self.HV_Sample[2,0]):
-									for uy in range(self.Height_Unit//self.HV_Sample[2,1]):
-										self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[2,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[2,0]+ux,2] = matCb.base[xx+yy*8]
+		marker = 0xffd0
 
+		while (marker >= 0xffd0 and marker <= 0xffd7):
+
+			data_pack, i = ToolKit.RemoveFF00(data[lenchunk:])
+			st = Stream(data_pack)
+			lenchunk = lenchunk + i
+			self.ADScounter = self.ADScounter + i
+
+			#for y in range(self.height//8//self.Height_Unit):
+				#for x in range(self.width//8//self.Width_Unit):
+				#	# decode 8x8 block
+				#	print(x," pos = ",st.pos)
+				#	for zx in range(self.HV_Sample[0,0]):
+				#		for zy in range(self.HV_Sample[0,1]):
+				#			matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
+				#			for xx in range(8):
+				#				for yy in range(8):
+				#					for ux in range(self.Width_Unit//self.HV_Sample[0,0]):
+				#						for uy in range(self.Height_Unit//self.HV_Sample[0,1]):
+				#							self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[0,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[0,0]+ux,0] = matL.base[xx+yy*8]
+				#	for zx in range(self.HV_Sample[1,0]):
+				#		for zy in range(self.HV_Sample[1,1]):
+				#			matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
+				#			for xx in range(8):
+				#				for yy in range(8):
+				#					for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
+				#						for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
+				#							self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[1,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[1,0]+ux,1] = matCr.base[xx+yy*8]
+				#	for zx in range(self.HV_Sample[2,0]):
+				#		for zy in range(self.HV_Sample[2,1]):
+				#			matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
+				#			for xx in range(8):
+				#				for yy in range(8):
+				#					for ux in range(self.Width_Unit//self.HV_Sample[2,0]):
+				#						for uy in range(self.Height_Unit//self.HV_Sample[2,1]):
+				#							self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[2,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[2,0]+ux,2] = matCb.base[xx+yy*8]
 
 				#print(self.Block)
 				# store it as RGB
-				for yy in range(8*self.Height_Unit):
-					for xx in range(8*self.Width_Unit):
-						self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = ToolKit.ColorConve
-						on(self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2])
+				#for yy in range(8*self.Height_Unit):
+				#	for xx in range(8*self.Width_Unit):
+				#		self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = ToolKit.ColorConve
+				#		on(self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2])
 						#self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2]
+
+			marker, = unpack(">H", data[lenchunk:lenchunk+2])
+			print("marker %02X, ADS "%marker, hex(self.ADScounter), marker_mapping.get(marker))
+			lenchunk += 2
+			self.ADScounter +=2
 
 		print(st.pos)
 		aa = st.GetBitN(8)
@@ -304,15 +315,13 @@ class JPEG:
 
 	def decode(self):
 		data = self.img_data
-		ADScounter = 0
-		counter = 0
+		self.ADScounter = 0
 		while(True):
 			marker, = unpack(">H", data[0:2])
-			print("marker %02X, ADS "%marker, hex(ADScounter), marker_mapping.get(marker))
+			print("marker %02X, ADS "%marker, hex(self.ADScounter), marker_mapping.get(marker))
 			if  marker == 0xffd8:
 				len_chunk = 2
 			elif marker == 0xffd9:
-				print("Counter", counter)
 				return (self.width, self.height, self.image)
 			else:
 				len_chunk, = unpack(">H", data[2:4])
@@ -328,21 +337,17 @@ class JPEG:
 				elif marker == 0xFFC4:
 					self.DefineHuffmanTables(chunk)
 				elif marker == 0xFFDA:
-					counter = counter + 1
-					data1,lenchunk = ToolKit.RemoveFF00(data[len_chunk:])
-					len_chunk = len_chunk + lenchunk
-					#print(len_chunk)
-					#print(len(data1))
+					#data1,lenchunk = ToolKit.RemoveFF00(data[len_chunk:])
+					len_chunk = self.StartOfScan(data, len_chunk)
 					#len_chunk = self.StartOfScan(data, len_chunk)
-				elif (marker >= 0xffd0 and marker <= 0xffd7):
-					data1,lenchunk = ToolKit.RemoveFF00(data[2:])
-					len_chunk = lenchunk + 2
-					counter = counter + 1
+				#elif (marker >= 0xffd0 and marker <= 0xffd7):
+				#	data1,lenchunk = ToolKit.RemoveFF00(data[2:])
+				#	len_chunk = lenchunk + 2
 					#print(len_chunk)
 					#print(len(data1))
 					#print()
 			data = data[len_chunk:]
-			ADScounter = ADScounter + len_chunk
+			self.ADScounter = self.ADScounter + len_chunk
 			if len(data)==0:
 				break		
 		
@@ -358,7 +363,7 @@ if __name__ == "__main__":
 
 	#Address = r'D:/Python/IMG_0401.JPG'
 	#我的这个苹果文件，一共189行，一行的高度是16, 16*189=3024。DRI=252，也就是一行的宽度
-	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
+	Address = r'D:/Python/IMG_0401.JPG'
 	#Address = r'F:/PyFile/test.jpg' 
 
 	img = JPEG(Address)
@@ -369,5 +374,3 @@ if __name__ == "__main__":
 
 	image1 = Image.fromarray(image).convert('RGB')
 	image1.show() 
-
-	
