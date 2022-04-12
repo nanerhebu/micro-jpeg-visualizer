@@ -4,54 +4,31 @@ from time import time
 from numpy import zeros, uint8, ones
 import cv2
 import ToolKit
-from bitarray import bitarray
-
 
 marker_mapping = {
 	0xffd8: "__Start of Image",
 	0xffe0: "__Application Default Header",	#FFE0-FFEF
 	0xffe1: "__Application Default Header_E1_iPhone only use this",
 	0xffdb: "__Quantization Table",
-	0xffdd: "__Define Restart Interval",	#FFD0-FFD7
+	0xffd0: "__Restart 0",	#FFD0-FFD7
+	0xffd1: "__Restart 1",
+	0xffd2: "__Restart 2",
+	0xffd3: "__Restart 3",
+	0xffd4: "__Restart 4",
+	0xffd5: "__Restart 5",
+	0xffd6: "__Restart 6",
+	0xffd7: "__Restart 7",
+	0xffdd: "__Define Restart Interval",
 	0xffc0: "__Start of Frame, Base line DCT",
 	0xffc4: "__Define Huffman Table",
 	0xffda: "__Start of Scan",
 	0xffd9: "__End of Image"
 }
 
-
-
-
-class Stream:
-# convert a string into a bit stream
-	def __init__(self, data):
-		self.data= data
-		self.pos = 0
-
-	def GetBit(self):
-		b = self.data[self.pos >> 3]
-		s = 7-(self.pos & 0x7)
-		self.pos += 1
-		return (b >> s) & 1
-
-	def GetBitN(self, l):
-		val = 0
-		for i in range(l):
-			val = val*2 + self.GetBit()
-		return val
-
-#——————干到这里——————
-def DecodeNumber(code, bits):
-    l = 2 ** (code - 1)	#就是二进制,B100000...(code位，code - 1个0）
-    if bits >= l:
-        return bits
-    else:
-        return bits - (2 * l - 1)	#——————应该是一个补码，明天查一查——————
-
 zigzag = [
 	 0,  1,  8, 16,  9,  2,  3, 10,
 	17, 24, 32, 25, 18, 11,  4,  5,
-	12, 19, 26, 33, 40, 48, 41, 34,
+	12, 19,	26, 33, 40, 48, 41, 34,
 	27, 20, 13,  6,  7, 14, 21, 28,
 	35, 42, 49, 56, 57, 50, 43, 36,
 	29, 22, 15, 23, 30, 37, 44, 51,
@@ -69,15 +46,34 @@ zigzag = [
 #    35, 36, 48, 49, 57, 58, 62, 63]
 
 
+class Stream:
+# convert a string into a bit stream
+	def __init__(self, data):
+		self.data= data
+		self.pos = 0
+
+	def GetBit(self):	#读取1比特，地址记录在pos上
+		b = self.data[self.pos >> 3]
+		s = 7-(self.pos & 0x7)
+		self.pos += 1
+		return (b >> s) & 1
+
+	def GetBitN(self, L):	#读取L比特
+		val = 0
+		for i in range(L):
+			val = val*2 + self.GetBit()
+		return val
+
+
 class IDCT:
-# helps build a MCU matrix, Inverse Discrete Cosine Transform = 反向离散余弦变换
+# helps build a MCU matrix
 	def __init__(self):
 		self.base = [0]*64
 
 	def NormCoeff(self, n):
-		return math.sqrt(1.0/8.0) if (n==0) else math.sqrt(2.0/8.0)
+		return math.sqrt( 1.0/8.0) if (n==0) else math.sqrt( 2.0/8.0)
 
-	def AddIDC(self, n, m, coeff):
+	def AddIDC(self, n,m, coeff):
 		an = self.NormCoeff(n)
 		am = self.NormCoeff(m)
 
@@ -140,185 +136,6 @@ class HuffmanTable:
                 return res
 
 
-def SOS_progressive_DC_scan(self,X,Y,sh,data):
-
-    #logger.debug("Progressive DC scan {}".format(sh))
-    
-    #print self.CSParams
-    #print sh
-    bound = ToolKit.get_boundary(data)
-    reg = data[:bound]
-    data = data[bound:]
-    reg = ToolKit.RemoveFF00(reg)
-
-    b = bitarray()
-    b.frombytes(reg)
-
-    #adjXY这两个，算了好像没用
-    adjY = math.ceil(math.ceil(Y/8)/self.maxV)*maxV
-    adjX = math.ceil(math.ceil(Y/8),self.maxH)*maxH
-    X=0
-    Y=0
-    lastDC = [0,0,0,0]
-
-    cip = ComponentIterationPlan(sh,self.CSParams,self.X,self.Y,self.restart_interval)
-    #logger.debug("Build iteration plan.")
-
-    done = False
-    while not cip.done():
-        #print y,x
-        j,x,y,dc,ac,restart,rmarker = cip.get()
-        #logger.debug("j={} x={} y={} restart={} marker={}".format(j,x,y,restart,rmarker))
-        dc_ht = self.dc_hts[dc]
-        ac_ht = self.ac_hts[ac]
-
-        if restart:
-            #logger.debug("Restart is true!")
-            #logger.debug("remaining bits={}".format(b.to01()))    
-            lastDC = [0,0,0,0]
-            unpack = [[16,0]]
-            byte_unpacker(data,unpack)
-            marker = unpack[0][1]
-
-            if marker < 0xFFD0 or marker > 0xFFD7:
-                logger.debug("Didn't get a marker as expected! 0x{:x}".format(marker))
-                # we didn't find a restart marker! that's a problem!
-                # don't know how to handle it, give up
-                return data
-
-            #logger.debug("Got a restart marker! before j = {} marker = 0x{:x}".format(j,marker))
-            # got a restart marker, so advance beyond that marker
-            data = data[2:]
-
-            if marker == 0xFFD0+rmarker:
-                logger.debug("Got marker that was expected!")
-                # got what expected!
-                pass
-            else:
-                #logger.debug("Did NOT get what was expected = {:x}!".format(marker))
-                # did not get the marker we expected!
-                # Skip ahead and find the next place to start decoding,
-                # but if we don't find a suitable place, give up
-                while not cip.done():
-                    j,x,y,dc,ac,restart,rmarker = cip.get()
-                    if restart and rmarker == marker:
-                        break
-                    next(cip)
-
-                if cip.done():
-                    # this means we never reconverged
-                    return data
-            
-            bound = get_boundary(data)
-            reg = data[:bound]
-            data = data[bound:]
-            b = bitarray()
-            reg = removePaddingAfterFF(reg)
-            b.frombytes(reg)
-
-            # get next interval of data
-            # expect to find restart marker!
-            # if we don't, it's an error, and scan ahead until we find it
-
-
-        offset,DC_val = progressive_entropy_decode_DC(dc_ht,b)
-        if offset==0:
-            # A few possibilities:
-            #  1. Missing data causing corrupt scan.
-            #  2. (same as 1) We could be missing data and immediately find a restart marker.
-            #  3. It's really the end (we can easily check this)
-            
-            # Handle case 3 first:
-            if cip.done()==True:
-                #logger.debug("Got to end of scan.")
-                break
-            else:
-                logger.debug("Failed to get data. Try to skip ahead to handle restart process.")
-                # skip ahead to next restart and process it
-                next(cip)
-                continue
-        
-        b = b[offset:]
-        lastDC[j] = DC_val+lastDC[j]
-        DC_val = lastDC[j]
-        #logger.debug("x={} y={} dc_val={}".format(x,y,DC_val))
-        DC_val = DC_val << (sh['Al']) # if Al==0, this is multiply by 1                       
-        self.comps[j].set_spectral(x,y,0,DC_val,True)
-        next(cip)
-            
-    assert cip.done() == True
-    #logger.debug("remaining bits={}".format(b.to01()))    
-    return data
-
-
-class ComponentIterationPlan:
-    def __init__(self, scanHeader, CSParams, X, Y, restart_interval=0):
-        self.maxH = max( [v['Hi'] for k,v in list(CSParams.items())] )
-        self.maxV = max( [v['Vi'] for k,v in list(CSParams.items())] )
-        self.Ns = scanHeader['Ns']
-        self.plan = []
-        self.X = X
-        self.Y = Y
-        self.restart_interval = restart_interval
-        self.restart_marker = 0
-
-        rCount = 0
-        restart = False
-        marker = self.restart_marker
-        #logger.debug("CIP: Ns={} restart_interval={} marker={}".format(self.Ns,self.restart_interval,self.restart_marker))
-
-        if self.Ns == 1:
-            # this is a simple top-left to bottom-right scan
-            #
-            assert len(scanHeader['CSParams']) == 1
-            component = scanHeader['CSParams'][0][0]
-            Hi = CSParams[component]['Hi']
-            Vi = CSParams[component]['Vi']
-            self.adjX = nearest(X*Hi//self.maxH,8)//8
-            self.adjY = nearest(Y*Vi//self.maxV,8)//8            
-            #self.adjX = nearest(X,8)/8*Hi/self.maxH
-            #self.adjY = nearest(Y,8)/8*Vi/self.maxV
-            for i in range(self.adjY):
-                for j in range(self.adjX):
-                    if self.restart_interval != 0:
-                        if rCount == self.restart_interval:
-                            #logger.debug("CIP: Found a restart marker. i={} j={}".format(i,j))
-                            restart = True
-                            marker = self.restart_marker
-                            rCount = 0
-                            self.restart_marker = (self.restart_marker+1)%8
-                        else:
-                            restart = False
-                            marker = -1
-                        rCount += 1                                                
-                    self.plan.append( [component,j,i,scanHeader['CSParams'][0][1],scanHeader['CSParams'][0][2],restart,marker] )            
-        else:
-            self.adjY = nearest(Y,8)/8
-            self.adjX = nearest(X,8)/8
-            for y in range(0,self.adjY,self.maxV):
-                for x in range(0,self.adjX,self.maxH):
-                    if self.restart_interval != 0:
-                        if rCount == self.restart_interval:
-                            restart = True
-                            marker = self.restart_marker
-                            rCount = 0
-                            self.restart_marker = (self.restart_marker+1)%8
-                        else:
-                            restart = False
-                            marker = -1
-                        rCount += 1
-                                                                    
-                    for j,dc,ac in scanHeader['CSParams']:
-                        #print dc,ac
-                        y_factor = self.maxV / CSParams[j]['Vi']
-                        x_factor = self.maxH / CSParams[j]['Hi']
-                        for yy in range(CSParams[j]['Vi']):
-                            for xx in range(CSParams[j]['Hi']):
-                                self.plan.append( [j,x/x_factor+xx,y/y_factor+yy,dc,ac,restart,marker] )
-                                restart = False
-        
-        self.index = 0
-
 class JPEG:
 	def __init__(self, image_file):
 		with open(image_file, 'rb') as f:
@@ -336,7 +153,7 @@ class JPEG:
 		i = IDCT()	
 		code = self.huffman_tables[0+idx].GetCode(st)
 		bits = st.GetBitN(code)
-		dccoeff = DecodeNumber(code, bits) + olddccoeff
+		dccoeff = ToolKit.DecodeNumber(code, bits) + olddccoeff
 
 		i.AddZigZag(0,(dccoeff) * quant[0])
 		l = 1
@@ -348,27 +165,32 @@ class JPEG:
 				l += (code>>4)
 				code = code & 0xf
 			
-			bits = st.GetBitN( code )
+			bits = st.GetBitN(code)
 
 			if l<64:
-				coeff  =  DecodeNumber(code, bits) 
+				coeff  =  ToolKit.DecodeNumber(code, bits) 
 				i.AddZigZag(l,coeff * quant[l])
 				l += 1
 		return i, dccoeff
 
 	def StartOfScan(self, data, hdrlen):
 		#将0xFF后的0x00去掉, lenchunk是去掉00之后的数据长度
-		#这里不lenchunk了，后面用len吧
-		#data, lenchunk = ToolKit.RemoveFF00(data[hdrlen:])
-		data = ToolKit.RemoveFF00(data[hdrlen:])
+		#print(type(data))
+		#print(len(data))
+		#print(hdrlen)
+		data, lenchunk = ToolKit.RemoveFF00(data[hdrlen:])
+		#print(type(data))
+		#print(len(data))
 		st = Stream(data)
 		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
 		#哪个是宽哪个是高
+		print(self.HV_Sample)
+		print(self.Height_Unit,self.Width_Unit)
 
 		for y in range(1):	#range(self.height//8//self.Height_Unit):
 			for x in range(self.width//8//self.Width_Unit):
-				print(x)
 				# decode 8x8 block
+				print(x," pos = ",st.pos)
 				for zx in range(self.HV_Sample[0,0]):
 					for zy in range(self.HV_Sample[0,1]):
 						matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
@@ -390,19 +212,36 @@ class JPEG:
 						matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
 						for xx in range(8):
 							for yy in range(8):
-								for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
-									for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
+								for ux in range(self.Width_Unit//self.HV_Sample[2,0]):
+									for uy in range(self.Height_Unit//self.HV_Sample[2,1]):
 										self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[2,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[2,0]+ux,2] = matCb.base[xx+yy*8]
 
 
+				#print(self.Block)
 				# store it as RGB
 				for yy in range(8*self.Height_Unit):
 					for xx in range(8*self.Width_Unit):
-						self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = ToolKit.ColorConversion(self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2])
+						self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = ToolKit.ColorConve
+						on(self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2])
+						#self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2]
 
-		#image1 = Image.fromarray(self.image[0:16,0:16,0:0]).convert('RGB')
-		image1 = Image.fromarray(self.image).convert('RGB')
+		print(st.pos)
+		aa = st.GetBitN(8)
+		print("%02X"%aa)
+		print(st.pos)
+
+		
+		#image1 = Image.fromarray(self.image[0:16,:,:]).convert('RGB')
+		image1 = Image.fromarray(self.image[0:16,:,:]).convert('YCrCb')
+		#imageA = Image.new('L', (16*3, 16*252)) #创建成品图的画布
+		#imageA = zeros((16 * 3, self.width, 1), uint8)
+		#imageA[0:16,:,0] = self.image[0:16,:,0]
+		#imageA[16:32,:,0] = self.image[0:16,:,1]
+		#imageA[32:48,:,0] = self.image[0:16,:,2]
+		#image1 = Image.fromarray(image1).convert('RGB')
+		image1 = Image.fromarray(image1).convert('YCrCb')
 		image1.show() 
+		print("1")
 		#return的好像不对。lenchunk是替换掉00后的数据长度。
 		return lenchunk + hdrlen
 
@@ -460,17 +299,20 @@ class JPEG:
 			#后4bits是目的标识
 			#print(hdr >>4, hdr & 0xf)
 			self.quant[hdr & 0xf] = unpack("B"*64, data[1:1 + 64]) 
-			#ToolKit.PrintMatrix(self.quant[hdr & 0xf])
+			#PrintMatrix(self.quant[hdr & 0xf])
 			data = data[65:]
 
 	def decode(self):
 		data = self.img_data
+		ADScounter = 0
+		counter = 0
 		while(True):
 			marker, = unpack(">H", data[0:2])
-			print("marker %02X"%marker, marker_mapping.get(marker))
-			if marker == 0xffd8:
+			print("marker %02X, ADS "%marker, hex(ADScounter), marker_mapping.get(marker))
+			if  marker == 0xffd8:
 				len_chunk = 2
 			elif marker == 0xffd9:
+				print("Counter", counter)
 				return (self.width, self.height, self.image)
 			else:
 				len_chunk, = unpack(">H", data[2:4])
@@ -486,14 +328,21 @@ class JPEG:
 				elif marker == 0xFFC4:
 					self.DefineHuffmanTables(chunk)
 				elif marker == 0xFFDA:
-					Header = data[:len_chunk]
-					data = data[len_chunk:]
-					len_chunk = ToolKit.get_boundary(data)
-					lin = ['%02X' % ord(chr(int(i))) for i in Header]
-					print(" ".join(lin))
-					print(len_chunk)
-					len_chunk = self.StartOfScan(data, len_chunk)
+					counter = counter + 1
+					data1,lenchunk = ToolKit.RemoveFF00(data[len_chunk:])
+					len_chunk = len_chunk + lenchunk
+					#print(len_chunk)
+					#print(len(data1))
+					#len_chunk = self.StartOfScan(data, len_chunk)
+				elif (marker >= 0xffd0 and marker <= 0xffd7):
+					data1,lenchunk = ToolKit.RemoveFF00(data[2:])
+					len_chunk = lenchunk + 2
+					counter = counter + 1
+					#print(len_chunk)
+					#print(len(data1))
+					#print()
 			data = data[len_chunk:]
+			ADScounter = ADScounter + len_chunk
 			if len(data)==0:
 				break		
 		
@@ -507,8 +356,9 @@ if __name__ == "__main__":
 	
 	from PIL import Image
 
-	Address = r'D:/Python/IMG_0401.JPG'
-	#Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
+	#Address = r'D:/Python/IMG_0401.JPG'
+	#我的这个苹果文件，一共189行，一行的高度是16, 16*189=3024。DRI=252，也就是一行的宽度
+	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG' 
 	#Address = r'F:/PyFile/test.jpg' 
 
 	img = JPEG(Address)
@@ -519,3 +369,5 @@ if __name__ == "__main__":
 
 	image1 = Image.fromarray(image).convert('RGB')
 	image1.show() 
+
+	
