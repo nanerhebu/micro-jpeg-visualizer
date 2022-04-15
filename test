@@ -174,10 +174,13 @@ class JPEG:
 				l += 1
 		return i, dccoeff
 
-	def DRI_Cal(self,st,DRI,stepX,stepY,quant,quantMapping,oldlumdccoeff, oldCbdccoeff, oldCrdccoeff):
+	def DRICal(self, st, oldlumdccoeff, oldCbdccoeff, oldCrdccoeff):
+
+		
+		DRIimage = zeros((self.DRI, self.Height_Unit*8, self.Width_Unit*8, 3))
+
 		for i in range(DRI):
 			# decode 8x8 block
-			print(x," pos = ",st.pos)
 			for zx in range(self.hv_sample[0,0]):
 				for zy in range(self.hv_sample[0,1]):
 					matl, oldlumdccoeff = self.buildmatrix(st,0, self.quant[self.quantmapping[0]], oldlumdccoeff)
@@ -185,7 +188,7 @@ class JPEG:
 						for yy in range(8):
 							for ux in range(self.width_unit//self.hv_sample[0,0]):
 								for uy in range(self.height_unit//self.hv_sample[0,1]):
-									self.block[zy*8+yy*self.height_unit//self.hv_sample[0,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[0,0]+ux,0] = matl.base[xx+yy*8]
+									DRIimage[i,zy*8+yy*self.height_unit//self.hv_sample[0,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[0,0]+ux,0] = matl.base[xx+yy*8]
 			for zx in range(self.hv_sample[1,0]):
 				for zy in range(self.hv_sample[1,1]):
 					matcr, oldcrdccoeff = self.buildmatrix(st,1, self.quant[self.quantmapping[1]], oldcrdccoeff)
@@ -193,7 +196,7 @@ class JPEG:
 						for yy in range(8):
 							for ux in range(self.width_unit//self.hv_sample[1,0]):
 								for uy in range(self.height_unit//self.hv_sample[1,1]):
-									self.block[zy*8+yy*self.height_unit//self.hv_sample[1,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[1,0]+ux,1] = matcr.base[xx+yy*8]
+									DRIimage[i,zy*8+yy*self.height_unit//self.hv_sample[1,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[1,0]+ux,1] = matcr.base[xx+yy*8]
 			for zx in range(self.hv_sample[2,0]):
 				for zy in range(self.hv_sample[2,1]):
 					matcb, oldcbdccoeff = self.buildmatrix(st,1, self.quant[self.quantmapping[2]], oldcbdccoeff)
@@ -201,9 +204,9 @@ class JPEG:
 						for yy in range(8):
 							for ux in range(self.width_unit//self.hv_sample[2,0]):
 								for uy in range(self.height_unit//self.hv_sample[2,1]):
-									self.block[zy*8+yy*self.height_unit//self.hv_sample[2,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[2,0]+ux,2] = matcb.base[xx+yy*8]
+									DRIimage[i,zy*8+yy*self.height_unit//self.hv_sample[2,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[2,0]+ux,2] = matcb.base[xx+yy*8]
 
-		return 
+		return DRIimage
 
 	def StartOfScan(self, data, hdrlen):
 		#将0xFF后的0x00去掉, lenchunk是去掉00之后的数据长度
@@ -217,50 +220,26 @@ class JPEG:
 		#print(self.Height_Unit,self.Width_Unit)
 
 		marker = 0xffd0
+		j = 0
 
 		while (marker >= 0xffd0 and marker <= 0xffd7):
 
-			data_pack, i = ToolKit.RemoveFF00(data[lenchunk:])
+			data_pack, Len = ToolKit.RemoveFF00(data[lenchunk:])
 			st = Stream(data_pack)
-			lenchunk = lenchunk + i
-			self.ADScounter = self.ADScounter + i
+			lenchunk = lenchunk + Len
+			self.ADScounter = self.ADScounter + Len
 
-			#for y in range(self.height//8//self.Height_Unit):
-				#for x in range(self.width//8//self.Width_Unit):
-				#	# decode 8x8 block
-				#	print(x," pos = ",st.pos)
-				#	for zx in range(self.HV_Sample[0,0]):
-				#		for zy in range(self.HV_Sample[0,1]):
-				#			matL, oldlumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldlumdccoeff)
-				#			for xx in range(8):
-				#				for yy in range(8):
-				#					for ux in range(self.Width_Unit//self.HV_Sample[0,0]):
-				#						for uy in range(self.Height_Unit//self.HV_Sample[0,1]):
-				#							self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[0,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[0,0]+ux,0] = matL.base[xx+yy*8]
-				#	for zx in range(self.HV_Sample[1,0]):
-				#		for zy in range(self.HV_Sample[1,1]):
-				#			matCr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
-				#			for xx in range(8):
-				#				for yy in range(8):
-				#					for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
-				#						for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
-				#							self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[1,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[1,0]+ux,1] = matCr.base[xx+yy*8]
-				#	for zx in range(self.HV_Sample[2,0]):
-				#		for zy in range(self.HV_Sample[2,1]):
-				#			matCb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
-				#			for xx in range(8):
-				#				for yy in range(8):
-				#					for ux in range(self.Width_Unit//self.HV_Sample[2,0]):
-				#						for uy in range(self.Height_Unit//self.HV_Sample[2,1]):
-				#							self.Block[zy*8+yy*self.Height_Unit//self.HV_Sample[2,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[2,0]+ux,2] = matCb.base[xx+yy*8]
+			DRIimage = self.DRICal(st, oldlumdccoeff, oldCbdccoeff, oldCrdccoeff)	
 
-				#print(self.Block)
-				# store it as RGB
-				#for yy in range(8*self.Height_Unit):
-				#	for xx in range(8*self.Width_Unit):
-				#		self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = ToolKit.ColorConve
-				#		on(self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2])
-						#self.image[y*8*self.Height_Unit+yy, x*8*self.Width_Unit+xx, ] = self.Block[yy,xx,0], self.Block[yy,xx,1], self.Block[yy,xx,2]
+			jj = j*self.Height_Unit*8
+			for i in range(DRI):
+				wedge = DRI*self.Width_Unit*8
+				for y in range(self.Height_Unit*8):
+					for x in range(self.Width_Unit*8):
+						self.image = [jj+y, wedge+x, 3] = DRIimage[]
+
+			j+=1
+
 
 			marker, = unpack(">H", data[lenchunk:lenchunk+2])
 			print("marker %02X, ADS "%marker, hex(self.ADScounter), marker_mapping.get(marker))
@@ -330,7 +309,6 @@ class JPEG:
 
 		self.Width_Unit = max(self.HV_Sample[0,0],self.HV_Sample[1,0],self.HV_Sample[2,0])
 		self.Height_Unit = max(self.HV_Sample[0,1],self.HV_Sample[1,1],self.HV_Sample[2,1])
-		self.Block = zeros((self.Height_Unit*8, self.Width_Unit*8, 3))
 
 
 
