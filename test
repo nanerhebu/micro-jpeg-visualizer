@@ -1,7 +1,7 @@
 from struct import unpack
 import math
 from time import time
-from numpy import zeros, uint8, ones
+from numpy import zeros, uint8, ones, copyto
 import cv2
 import ToolKit
 
@@ -45,6 +45,17 @@ zigzag = [
 #    21, 34, 37, 47, 50, 56, 59, 61,
 #    35, 36, 48, 49, 57, 58, 62, 63]
 
+def Clamp(col):
+    #Makes sure col is between 0 and 255.
+    col = 255 if col > 255 else col
+    col = 0 if col < 0 else col
+    return int(col)
+
+def ColorConversion(Y, Cr, Cb):
+	R = Cr*(2-2*.299) + Y
+	B = Cb*(2-2*.114) + Y
+	G = (Y - .114*B - .299*R)/.587
+	return (Clamp(R+128),Clamp(G+128),Clamp(B+128))
 
 class Stream:
 # convert a string into a bit stream
@@ -174,38 +185,39 @@ class JPEG:
 				l += 1
 		return i, dccoeff
 
-	def DRICal(self, st, oldlumdccoeff, oldCbdccoeff, oldCrdccoeff):
+	def DRICal(self, st):
 
 		
-		DRIimage = zeros((self.DRI, self.Height_Unit*8, self.Width_Unit*8, 3))
+		DRIimage = zeros((self.DRI, self.Height_Unit*8, self.Width_Unit*8, 3), uint8)
+		oldLumdccoeff, oldCrdccoeff, oldCbdccoeff = 0, 0, 0
 
-		for i in range(DRI):
+		for i in range(self.DRI):
 			# decode 8x8 block
-			for zx in range(self.hv_sample[0,0]):
-				for zy in range(self.hv_sample[0,1]):
-					matl, oldlumdccoeff = self.buildmatrix(st,0, self.quant[self.quantmapping[0]], oldlumdccoeff)
+			for zx in range(self.HV_Sample[0,0]):
+				for zy in range(self.HV_Sample[0,1]):
+					matl, oldLumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldLumdccoeff)
 					for xx in range(8):
 						for yy in range(8):
-							for ux in range(self.width_unit//self.hv_sample[0,0]):
-								for uy in range(self.height_unit//self.hv_sample[0,1]):
-									DRIimage[i,zy*8+yy*self.height_unit//self.hv_sample[0,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[0,0]+ux,0] = matl.base[xx+yy*8]
-			for zx in range(self.hv_sample[1,0]):
-				for zy in range(self.hv_sample[1,1]):
-					matcr, oldcrdccoeff = self.buildmatrix(st,1, self.quant[self.quantmapping[1]], oldcrdccoeff)
+							for ux in range(self.Width_Unit//self.HV_Sample[0,0]):
+								for uy in range(self.Height_Unit//self.HV_Sample[0,1]):
+									DRIimage[i, zy*8+yy*self.Height_Unit//self.HV_Sample[0,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[0,0]+ux,0] = matl.base[xx+yy*8]
+			for zx in range(self.HV_Sample[1,0]):
+				for zy in range(self.HV_Sample[1,1]):
+					matcr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
 					for xx in range(8):
 						for yy in range(8):
-							for ux in range(self.width_unit//self.hv_sample[1,0]):
-								for uy in range(self.height_unit//self.hv_sample[1,1]):
-									DRIimage[i,zy*8+yy*self.height_unit//self.hv_sample[1,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[1,0]+ux,1] = matcr.base[xx+yy*8]
-			for zx in range(self.hv_sample[2,0]):
-				for zy in range(self.hv_sample[2,1]):
-					matcb, oldcbdccoeff = self.buildmatrix(st,1, self.quant[self.quantmapping[2]], oldcbdccoeff)
+							for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
+								for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
+									DRIimage[i, zy*8+yy*self.Height_Unit//self.HV_Sample[1,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[1,0]+ux,1] = matcr.base[xx+yy*8]
+			for zx in range(self.HV_Sample[2,0]):
+				for zy in range(self.HV_Sample[2,1]):
+					matcb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
 					for xx in range(8):
 						for yy in range(8):
-							for ux in range(self.width_unit//self.hv_sample[2,0]):
-								for uy in range(self.height_unit//self.hv_sample[2,1]):
-									DRIimage[i,zy*8+yy*self.height_unit//self.hv_sample[2,1]+uy, zx*8+xx*self.width_unit//self.hv_sample[2,0]+ux,2] = matcb.base[xx+yy*8]
-
+							for ux in range(self.Width_Unit//self.HV_Sample[2,0]):
+								for uy in range(self.Height_Unit//self.HV_Sample[2,1]):
+									DRIimage[i, zy*8+yy*self.Height_Unit//self.HV_Sample[2,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[2,0]+ux,2] = matcb.base[xx+yy*8]
+		
 		return DRIimage
 
 	def StartOfScan(self, data, hdrlen):
@@ -214,11 +226,13 @@ class JPEG:
 		self.ADScounter = self.ADScounter + hdrlen
 		#print(type(data))
 		#print(len(data))
-		oldlumdccoeff, oldCbdccoeff, oldCrdccoeff = 0, 0, 0
+
 		#哪个是宽哪个是高
 		#print(self.HV_Sample)
 		#print(self.Height_Unit,self.Width_Unit)
 
+		self.image = zeros((self.height, self.width, 3), uint8)
+		image_YCrCb = zeros((self.height, self.width, 3), uint8)
 		marker = 0xffd0
 		j = 0
 
@@ -229,15 +243,23 @@ class JPEG:
 			lenchunk = lenchunk + Len
 			self.ADScounter = self.ADScounter + Len
 
-			DRIimage = self.DRICal(st, oldlumdccoeff, oldCbdccoeff, oldCrdccoeff)	
+			DRIimage = self.DRICal(st)	
 
 			jj = j*self.Height_Unit*8
-			for i in range(DRI):
-				wedge = DRI*self.Width_Unit*8
-				for y in range(self.Height_Unit*8):
-					for x in range(self.Width_Unit*8):
-						self.image = [jj+y, wedge+x, 3] = DRIimage[]
+			jj1 = jj+self.Height_Unit*8
+			for i in range(self.DRI):
+				kk = i*self.Width_Unit*8
+				kk1 = kk+self.Width_Unit*8
+				#image_YCrCb[jj:jj1, kk:kk1,:] = DRIimage[i,:,:,:]
+				copyto(image_YCrCb[jj:jj1, kk:kk1,:] , DRIimage[i,:,:,:])
+				#print(image_YCrCb[jj:jj1, kk:kk1,:])
+				#print(DRIimage[i,:,:,:])
+				#break
+				#for y in range(self.Height_Unit*8):
+				#	for x in range(self.Width_Unit*8):
+				#		image_YCrCb[jj+y, kk+x,:] = DRIimage[i,y,x,:]
 
+			break
 			j+=1
 
 
@@ -246,21 +268,21 @@ class JPEG:
 			lenchunk += 2
 			self.ADScounter +=2
 
-		print(st.pos)
-		aa = st.GetBitN(8)
-		print("%02X"%aa)
-		print(st.pos)
+		print(image_YCrCb)
+		for i in range(16):
+			for j in range(self.width):
+				self.image[i,j,:] = ColorConversion(image_YCrCb[i,j,0],image_YCrCb[i,j,1],image_YCrCb[i,j,2])
 
 		
-		#image1 = Image.fromarray(self.image[0:16,:,:]).convert('RGB')
-		image1 = Image.fromarray(self.image[0:16,:,:]).convert('YCrCb')
+		image1 = Image.fromarray(self.image[0:16,:]).convert('RGB')
+		#image1 = Image.fromarray(image_YCrCb[0:16,:,:]).convert('YCrCb')
 		#imageA = Image.new('L', (16*3, 16*252)) #创建成品图的画布
 		#imageA = zeros((16 * 3, self.width, 1), uint8)
 		#imageA[0:16,:,0] = self.image[0:16,:,0]
 		#imageA[16:32,:,0] = self.image[0:16,:,1]
 		#imageA[32:48,:,0] = self.image[0:16,:,2]
 		#image1 = Image.fromarray(image1).convert('RGB')
-		image1 = Image.fromarray(image1).convert('YCrCb')
+		#image1 = Image.fromarray(image1).convert('YCrCb')
 		image1.show() 
 		print("1")
 		#return的好像不对。lenchunk是替换掉00后的数据长度。
@@ -297,7 +319,6 @@ class JPEG:
 		print("size %ix%i" % (self.width,  self.height))
 		print("hdr %i, Num_Components %i" % (hdr, Num_Components))
 		#self.image = [0] * (self.width * self.height);
-		self.image = zeros((self.height, self.width, 3), uint8)
 		for i in range(Num_Components):
 			id, HV, QtbId = unpack("BBB",data[6+i*3:9+i*3])
 			#样本因子H和V是4bits无符号整数，但unpack最小只能取8bits，所以用位处理把HV拆成4bits。
@@ -371,8 +392,8 @@ if __name__ == "__main__":
 	from PIL import Image
 
 	#我的这个苹果文件，一共189行，一行的高度是16, 16*189=3024。DRI=252，也就是一行的宽度
-	#Address = r'D:/Python/IMG_0401.JPG'
-	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG'
+	Address = r'D:/Python/IMG_0401.JPG'
+	#Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG'
 	#Address = r'F:/PyFile/test.jpg' 
 
 	img = JPEG(Address)
