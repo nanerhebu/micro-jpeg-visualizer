@@ -4,6 +4,7 @@ from time import time
 from numpy import zeros, uint8, ones, copyto, float64 
 import cv2
 import ToolKit
+from PIL import Image
 
 marker_mapping = {
 	0xffd8: "__Start of Image",
@@ -44,18 +45,6 @@ zigzag = [
 #    20, 22, 33, 38, 46, 51, 55, 60,
 #    21, 34, 37, 47, 50, 56, 59, 61,
 #    35, 36, 48, 49, 57, 58, 62, 63]
-
-def Clamp(col):
-    #Makes sure col is between 0 and 255.
-    col = 255 if col > 255 else col
-    col = 0 if col < 0 else col
-    return int(col)
-
-def ColorConversion(Y, Cr, Cb):
-	R = Cr*(2-2*.299) + Y
-	B = Cb*(2-2*.114) + Y
-	G = (Y - .114*B - .299*R)/.587
-	return (Clamp(R+128),Clamp(G+128),Clamp(B+128))
 
 class Stream:
 # convert a string into a bit stream
@@ -232,7 +221,7 @@ class JPEG:
 		marker = 0xffd0
 		j = 0
 
-		tem = 0
+		#tem = 0
 		while (marker >= 0xffd0 and marker <= 0xffd7):
 
 			data_pack, Len = ToolKit.RemoveFF00(data[lenchunk:])
@@ -252,9 +241,9 @@ class JPEG:
 				#for y in range(self.Height_Unit*8):
 				#	for x in range(self.Width_Unit*8):
 				#		image_YCrCb[jj+y, kk+x,:] = DRIimage[i,y,x,:]
-			if tem >= 2:
-				break
-			tem += 1
+			#if tem >= 2:
+			#	break
+			#tem += 1
 			j+=1
 
 
@@ -264,15 +253,14 @@ class JPEG:
 			self.ADScounter +=2
 
 		#print(image_YCrCb[0:16,0*16:1*16,])
-		for i in range(16*3):
+		for i in range(self.Height_Unit):
 			for j in range(self.width):
-				#self.image[i,j,:] = ColorConversion(image_YCrCb[i,j,0],image_YCrCb[i,j,1],image_YCrCb[i,j,2])
-				self.image[i,j,:] = ToolKit.ColorConversion(image_YCrCb[i,j,0],image_YCrCb[i,j,1],image_YCrCb[i,j,2])
-
+				#JPEG里面是先Cb再Cr
+				self.image[i,j,:] = ToolKit.ColorConversion(image_YCrCb[i,j,0],image_YCrCb[i,j,2],image_YCrCb[i,j,1])
 
 
 		
-		image1 = Image.fromarray(self.image[0:16*3,:,:]).convert('RGB')
+		image1 = Image.fromarray(self.image[:,:,:]).convert('RGB')
 		#image1 = Image.fromarray(image_YCrCb[0:16,:,:]).convert('YCrCb')
 		#imageA = Image.new('L', (16*3, 16*252)) #创建成品图的画布
 		#imageA = zeros((16 * 3, self.width, 1), uint8)
@@ -386,12 +374,10 @@ class JPEG:
 		return (self.image)
 
 if __name__ == "__main__":
-	
-	from PIL import Image
 
 	#我的这个苹果文件，一共189行，一行的高度是16, 16*189=3024。DRI=252，也就是一行的宽度
-	#Address = r'D:/Python/IMG_0401.JPG'
-	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG'
+	Address = r'D:/Python/IMG_0401.JPG'
+	#Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG'
 	#Address = r'F:/PyFile/test.jpg' 
 
 	img = JPEG(Address)
