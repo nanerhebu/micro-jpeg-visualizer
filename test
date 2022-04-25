@@ -1,7 +1,7 @@
 from struct import unpack
 import math
 from time import time
-from numpy import zeros, uint8, ones, copyto
+from numpy import zeros, uint8, ones, copyto, float64 
 import cv2
 import ToolKit
 
@@ -188,54 +188,51 @@ class JPEG:
 	def DRICal(self, st):
 
 		
-		DRIimage = zeros((self.DRI, self.Height_Unit*8, self.Width_Unit*8, 3), uint8)
+		DRIimage = zeros((self.DRI, self.Height_Unit*8, self.Width_Unit*8, 3), float64)
+
 		oldLumdccoeff, oldCrdccoeff, oldCbdccoeff = 0, 0, 0
 
+		#不对所有JPEG适用，只适用于当前格式
 		for i in range(self.DRI):
 			# decode 8x8 block
-			for zx in range(self.HV_Sample[0,0]):
-				for zy in range(self.HV_Sample[0,1]):
+			for zy in range(self.HV_Sample[0,1]):
+				for zx in range(self.HV_Sample[0,0]):
 					matl, oldLumdccoeff = self.BuildMatrix(st,0, self.quant[self.quantMapping[0]], oldLumdccoeff)
-					for xx in range(8):
-						for yy in range(8):
-							for ux in range(self.Width_Unit//self.HV_Sample[0,0]):
-								for uy in range(self.Height_Unit//self.HV_Sample[0,1]):
-									DRIimage[i, zy*8+yy*self.Height_Unit//self.HV_Sample[0,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[0,0]+ux,0] = matl.base[xx+yy*8]
-			for zx in range(self.HV_Sample[1,0]):
-				for zy in range(self.HV_Sample[1,1]):
+					for yy in range(8):
+						for xx in range(8):
+							for uy in range(self.Height_Unit//self.HV_Sample[0,1]):
+								for ux in range(self.Width_Unit//self.HV_Sample[0,0]):
+									DRIimage[i, zy*8+yy*self.Height_Unit//self.HV_Sample[0,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[0,0]+ux,0] = matl.base[yy*8+xx]
+			for zy in range(self.HV_Sample[1,1]):
+				for zx in range(self.HV_Sample[1,0]):
 					matcr, oldCrdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[1]], oldCrdccoeff)
-					for xx in range(8):
-						for yy in range(8):
-							for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
-								for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
-									DRIimage[i, zy*8+yy*self.Height_Unit//self.HV_Sample[1,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[1,0]+ux,1] = matcr.base[xx+yy*8]
-			for zx in range(self.HV_Sample[2,0]):
-				for zy in range(self.HV_Sample[2,1]):
+					for yy in range(8):
+						for xx in range(8):
+							for uy in range(self.Height_Unit//self.HV_Sample[1,1]):
+								for ux in range(self.Width_Unit//self.HV_Sample[1,0]):
+									DRIimage[i, zy*8+yy*self.Height_Unit//self.HV_Sample[1,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[1,0]+ux,1] = matcr.base[yy*8+xx]
+			for zy in range(self.HV_Sample[2,1]):
+				for zx in range(self.HV_Sample[2,0]):
 					matcb, oldCbdccoeff = self.BuildMatrix(st,1, self.quant[self.quantMapping[2]], oldCbdccoeff)
-					for xx in range(8):
-						for yy in range(8):
-							for ux in range(self.Width_Unit//self.HV_Sample[2,0]):
-								for uy in range(self.Height_Unit//self.HV_Sample[2,1]):
+					for yy in range(8):
+						for xx in range(8):
+							for uy in range(self.Height_Unit//self.HV_Sample[2,1]):
+								for ux in range(self.Width_Unit//self.HV_Sample[2,0]):
 									DRIimage[i, zy*8+yy*self.Height_Unit//self.HV_Sample[2,1]+uy, zx*8+xx*self.Width_Unit//self.HV_Sample[2,0]+ux,2] = matcb.base[xx+yy*8]
-		
 		return DRIimage
 
 	def StartOfScan(self, data, hdrlen):
 		#将0xFF后的0x00去掉, lenchunk是去掉00之后的数据长度
 		lenchunk = hdrlen
 		self.ADScounter = self.ADScounter + hdrlen
-		#print(type(data))
-		#print(len(data))
-
-		#哪个是宽哪个是高
-		#print(self.HV_Sample)
-		#print(self.Height_Unit,self.Width_Unit)
 
 		self.image = zeros((self.height, self.width, 3), uint8)
-		image_YCrCb = zeros((self.height, self.width, 3), uint8)
+		image_YCrCb = zeros((self.height, self.width, 3), float64)
+		DRIimage = zeros((self.DRI, self.Height_Unit*8, self.Width_Unit*8, 3), float64)
 		marker = 0xffd0
 		j = 0
 
+		tem = 0
 		while (marker >= 0xffd0 and marker <= 0xffd7):
 
 			data_pack, Len = ToolKit.RemoveFF00(data[lenchunk:])
@@ -247,19 +244,17 @@ class JPEG:
 
 			jj = j*self.Height_Unit*8
 			jj1 = jj+self.Height_Unit*8
+
 			for i in range(self.DRI):
 				kk = i*self.Width_Unit*8
 				kk1 = kk+self.Width_Unit*8
-				#image_YCrCb[jj:jj1, kk:kk1,:] = DRIimage[i,:,:,:]
 				copyto(image_YCrCb[jj:jj1, kk:kk1,:] , DRIimage[i,:,:,:])
-				#print(image_YCrCb[jj:jj1, kk:kk1,:])
-				#print(DRIimage[i,:,:,:])
-				#break
 				#for y in range(self.Height_Unit*8):
 				#	for x in range(self.Width_Unit*8):
 				#		image_YCrCb[jj+y, kk+x,:] = DRIimage[i,y,x,:]
-
-			break
+			if tem >= 2:
+				break
+			tem += 1
 			j+=1
 
 
@@ -268,13 +263,16 @@ class JPEG:
 			lenchunk += 2
 			self.ADScounter +=2
 
-		print(image_YCrCb)
-		for i in range(16):
+		#print(image_YCrCb[0:16,0*16:1*16,])
+		for i in range(16*3):
 			for j in range(self.width):
-				self.image[i,j,:] = ColorConversion(image_YCrCb[i,j,0],image_YCrCb[i,j,1],image_YCrCb[i,j,2])
+				#self.image[i,j,:] = ColorConversion(image_YCrCb[i,j,0],image_YCrCb[i,j,1],image_YCrCb[i,j,2])
+				self.image[i,j,:] = ToolKit.ColorConversion(image_YCrCb[i,j,0],image_YCrCb[i,j,1],image_YCrCb[i,j,2])
+
+
 
 		
-		image1 = Image.fromarray(self.image[0:16,:]).convert('RGB')
+		image1 = Image.fromarray(self.image[0:16*3,:,:]).convert('RGB')
 		#image1 = Image.fromarray(image_YCrCb[0:16,:,:]).convert('YCrCb')
 		#imageA = Image.new('L', (16*3, 16*252)) #创建成品图的画布
 		#imageA = zeros((16 * 3, self.width, 1), uint8)
@@ -284,7 +282,7 @@ class JPEG:
 		#image1 = Image.fromarray(image1).convert('RGB')
 		#image1 = Image.fromarray(image1).convert('YCrCb')
 		image1.show() 
-		print("1")
+		print()
 		#return的好像不对。lenchunk是替换掉00后的数据长度。
 		return lenchunk + hdrlen
 
@@ -392,8 +390,8 @@ if __name__ == "__main__":
 	from PIL import Image
 
 	#我的这个苹果文件，一共189行，一行的高度是16, 16*189=3024。DRI=252，也就是一行的宽度
-	Address = r'D:/Python/IMG_0401.JPG'
-	#Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG'
+	#Address = r'D:/Python/IMG_0401.JPG'
+	Address = r'F:/PyFile/Visibility_Photo/IMG_0401.JPG'
 	#Address = r'F:/PyFile/test.jpg' 
 
 	img = JPEG(Address)
